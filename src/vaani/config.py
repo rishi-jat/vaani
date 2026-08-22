@@ -50,9 +50,31 @@ class Settings(BaseSettings):
     sarvam_api_key: str = Field(default="", alias="SARVAM_API_KEY")
     elevenlabs_api_key: str = Field(default="", alias="ELEVENLABS_API_KEY")
     xai_api_key: str = Field(default="", alias="XAI_API_KEY")
+    groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     hf_token: str = Field(default="", alias="HF_TOKEN")
     llm_model: str = "grok-4.5"
     llm_base_url: str = "https://api.x.ai/v1"
+
+    @property
+    def active_llm_api_key(self) -> str:
+        return self.groq_api_key or self.xai_api_key or self.openai_api_key
+
+    @property
+    def active_llm_base_url(self) -> str:
+        if self.groq_api_key:
+            return "https://api.groq.com/openai/v1"
+        if self.xai_api_key:
+            return self.llm_base_url
+        if self.openai_api_key:
+            return "https://api.openai.com/v1"
+        return self.llm_base_url
+
+    @property
+    def active_llm_model(self) -> str:
+        if self.groq_api_key:
+            return "llama-3.1-8b-instant"
+        return self.llm_model
 
     @property
     def lang_list(self) -> list[str]:

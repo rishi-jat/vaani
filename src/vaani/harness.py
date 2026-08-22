@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from vaani.config import Settings, get_settings
 from vaani.embeddings import Encoder
 from vaani.extract import extract
-from vaani.generate import GenerateError, polish
+from vaani.generate import GenerateError, polish, translate_query_for_msmarco
 from vaani.guardrails import (
     GuardDecision,
     abstain_message,
@@ -107,10 +107,11 @@ class Pipeline:
             )
 
         query = clip_query(fold_stt_transcript(text), self.settings.max_query_chars)
+        search_query = translate_query_for_msmarco(query, self.settings)
 
         t0 = _now()
         if self.index.faiss_index is not None and self.encoder is not None:
-            qvec = self.encoder.encode_query(query)
+            qvec = self.encoder.encode_query(search_query)
         else:
             import numpy as np
 
@@ -118,7 +119,7 @@ class Pipeline:
         timings.embed_ms = _ms(t0)
 
         t0 = _now()
-        hits = rerank_hits(query, self.index.search(query, qvec, top_k=self.settings.top_k))
+        hits = rerank_hits(search_query, self.index.search(search_query, qvec, top_k=self.settings.top_k))
         timings.retrieve_ms = _ms(t0)
 
         if self.index.faiss_index is not None:
@@ -130,7 +131,7 @@ class Pipeline:
         citations = _build_citations(hits, limit=5)
         ot = off_topic(topic_score, topic_cut)
         if ot.ok:
-            ot = coverage_gate(query, [h[0].parent_text for h in hits[:3]], threshold=0.6)
+            ot = coverage_gate(search_query, [h[0].parent_text for h in hits[:3]], threshold=0.6)
         if not ot.ok:
             timings.total_rag_ms = _ms(wall)
             timings.total_ms = timings.total_rag_ms + (stt_ms or 0.0)
@@ -149,14 +150,14 @@ class Pipeline:
             )
 
         t0 = _now()
-        ext = extract(query, hits)
+        ext = extract(search_query, hits)
         timings.extract_ms = _ms(t0)
 
         t0 = _now()
         contexts = [h[0].parent_text for h in hits]
         if ext is None:
             g = grounding("", contexts, self.settings.support_threshold)
-        elif attachment_conflict(query, ext.answer):
+        elif attachment_conflict(search_query, ext.answer):
             g = GuardDecision(False, "abstain", "extract attaches the property to a different owner")
         else:
             g = grounding(ext.answer, contexts, self.settings.support_threshold)

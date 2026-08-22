@@ -58,14 +58,16 @@ The extractive answer **is** the final RAG output. It is an exact substring of r
 
 | Piece | Choice |
 |-------|--------|
-| STT | Sarvam `saaras:v3` (default) or ElevenLabs `scribe_v2` with dynamic language codes (`hi-IN`, `en-IN`, `auto`) |
+| STT | Sarvam `saaras:v3` (default) or ElevenLabs `scribe_v2` with dynamic language codes (`hi-IN`, `en-IN`, `auto`) and VAD |
+| Query Reformulation | Cross-lingual translation to Hindi search representation via Groq (`llama-3.1-8b-instant`), xAI, or rule-based offline mapper |
 | Embeddings | local `intfloat/multilingual-e5-small` (384-d, quantized) |
 | Dense Index | FAISS HNSW (`efSearch=64`, `efConstruction=80`) |
-| Sparse Index | in-process BM25 with **script-aware tokenization** (Devanagari aksharas preserved) |
+| Sparse Index | Script-aware BM25 with **content-token weighting** (1.6x) & **contiguous bigram co-occurrence boost** |
 | Fusion | Reciprocal Rank Fusion ($k=60$) |
-| Answer | Sentence-level extractive span with citation deduplication |
+| Reranking | Multi-criteria reranker with genitive property attachment validation & exact phrase boost |
+| Answer | Sentence-level extractive span isolation with citation deduplication |
 | Guardrails | Input intent refusal, off-topic detection, query coverage gate, and grounding verification |
-| Polish | xAI Grok (`grok-4.5`) — optional & outside the 200ms budget |
+| Polish | Groq / xAI Grok (`grok-4.5`) — optional & outside the 200ms budget |
 | Concurrency | FastAPI with `CORSMiddleware` + `starlette.concurrency.run_in_threadpool` |
 | Web UI | Interactive UI with visual latency waterfall bar, live benchmark modal, strategy ablation comparison, and audio readout |
 | Dataset | MSMARCO-XI Hindi val, **all 57,331 unique selected passages** |

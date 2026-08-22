@@ -88,7 +88,9 @@ def relevance_tuple(query: str, text: str, fused: float, dense: float) -> tuple:
     """Sort key, higher is better. Used to rerank the hybrid pool."""
     conflict = attachment_conflict(query, text)
     cover = query_coverage(query, text)
-    return (not conflict, cover, dense, fused)
+    q_norm = query.strip().rstrip("?").strip().lower()
+    exact_match = 1.0 if q_norm and q_norm in text.lower() else 0.0
+    return (not conflict, exact_match, cover, dense, fused)
 
 
 def rerank_hits(query: str, hits: list) -> list:

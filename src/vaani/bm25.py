@@ -49,6 +49,10 @@ class BM25:
             return []
         scores: dict[int, float] = {}
         seen: set[str] = set()
+
+        # Stop words set for token weighting
+        from vaani.guardrails import _STOP
+
         for term in q_terms:
             if term in seen:
                 continue
@@ -57,11 +61,28 @@ class BM25:
             if not postings:
                 continue
             idf = self._idf(term)
+            # Boost non-stop content tokens
+            weight = 1.6 if term not in _STOP and len(term) > 1 else 0.85
             for i in postings:
                 freq = self.tf[i][term]
                 dl = self.dl[i]
                 denom = freq + self.k1 * (1 - self.b + self.b * dl / (self.avgdl or 1.0))
-                scores[i] = scores.get(i, 0.0) + idf * (freq * (self.k1 + 1) / denom)
+                scores[i] = scores.get(i, 0.0) + (idf * weight) * (freq * (self.k1 + 1) / denom)
+
+        # Contiguous bigram co-occurrence boost
+        if len(q_terms) >= 2:
+            for j in range(len(q_terms) - 1):
+                t1, t2 = q_terms[j], q_terms[j + 1]
+                if t1 in _STOP and t2 in _STOP:
+                    continue
+                p1 = self.inverted.get(t1)
+                p2 = self.inverted.get(t2)
+                if p1 and p2:
+                    common = set(p1) & set(p2)
+                    for doc_idx in common:
+                        if doc_idx in scores:
+                            scores[doc_idx] += 0.85 * (self._idf(t1) + self._idf(t2))
+
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return ranked[:top_k]
 
